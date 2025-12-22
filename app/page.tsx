@@ -5,9 +5,10 @@ import { Dashboard } from '@/components/dashboard';
 import { ComplaintsList } from '@/components/complaints-list';
 import { ComplaintDetails } from '@/components/complaint-details';
 import { Analytics } from '@/components/analytics';
+import { RecordComplaint } from '@/components/record-complaint';
 import { BottomNavigation } from '@/components/bottom-navigation';
 
-type View = 'dashboard' | 'complaints' | 'details' | 'analytics';
+type View = 'dashboard' | 'complaints' | 'details' | 'analytics' | 'record';
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
@@ -23,7 +24,7 @@ export default function Home() {
     setSelectedComplaintId(null);
   };
 
-  const handleNavigate = (tab: 'dashboard' | 'complaints' | 'analytics') => {
+  const handleNavigate = (tab: 'dashboard' | 'complaints' | 'analytics' | 'record') => {
     setCurrentView(tab);
     setSelectedComplaintId(null);
   };
@@ -50,6 +51,14 @@ export default function Home() {
             Жалобы
           </button>
           <button
+            onClick={() => handleNavigate('record')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              currentView === 'record' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Новая жалоба
+          </button>
+          <button
             onClick={() => handleNavigate('analytics')}
             className={`px-4 py-2 font-medium transition-colors ${
               currentView === 'analytics' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-muted-foreground hover:text-foreground'
@@ -65,12 +74,13 @@ export default function Home() {
         {currentView === 'details' && selectedComplaintId && (
           <ComplaintDetails complaintId={selectedComplaintId} onBack={handleBackToList} />
         )}
+        {currentView === 'record' && <RecordComplaint />}
         {currentView === 'analytics' && <Analytics />}
       </div>
 
       {/* Mobile Bottom Navigation */}
       <BottomNavigation
-        active={currentView === 'dashboard' ? 'dashboard' : currentView === 'analytics' ? 'analytics' : 'complaints'}
+        active={currentView === 'dashboard' ? 'dashboard' : currentView === 'analytics' ? 'analytics' : currentView === 'record' ? 'record' : 'complaints'}
         onNavigate={handleNavigate}
       />
     </div>

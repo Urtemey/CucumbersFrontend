@@ -1,17 +1,17 @@
 'use client';
 
 interface BottomNavigationProps {
-  active: 'dashboard' | 'complaints' | 'analytics';
-  onNavigate: (tab: 'dashboard' | 'complaints' | 'analytics') => void;
+  active: 'dashboard' | 'complaints' | 'analytics' | 'record';
+  onNavigate: (tab: 'dashboard' | 'complaints' | 'analytics' | 'record') => void;
 }
 
 export function BottomNavigation({ active, onNavigate }: BottomNavigationProps) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 border-t border-border bg-card md:hidden">
-      <div className="flex">
+      <div className="grid grid-cols-4">
         <button
           onClick={() => onNavigate('dashboard')}
-          className={`flex-1 py-4 text-center font-medium transition-colors ${
+          className={`py-3 text-center font-medium transition-colors text-xs ${
             active === 'dashboard' ? 'text-blue-600 border-t-2 border-blue-600' : 'text-muted-foreground'
           }`}
         >
@@ -19,15 +19,23 @@ export function BottomNavigation({ active, onNavigate }: BottomNavigationProps) 
         </button>
         <button
           onClick={() => onNavigate('complaints')}
-          className={`flex-1 py-4 text-center font-medium transition-colors ${
+          className={`py-3 text-center font-medium transition-colors text-xs ${
             active === 'complaints' ? 'text-blue-600 border-t-2 border-blue-600' : 'text-muted-foreground'
           }`}
         >
           Жалобы
         </button>
         <button
+          onClick={() => onNavigate('record')}
+          className={`py-3 text-center font-medium transition-colors text-xs ${
+            active === 'record' ? 'text-blue-600 border-t-2 border-blue-600' : 'text-muted-foreground'
+          }`}
+        >
+          Запись
+        </button>
+        <button
           onClick={() => onNavigate('analytics')}
-          className={`flex-1 py-4 text-center font-medium transition-colors ${
+          className={`py-3 text-center font-medium transition-colors text-xs ${
             active === 'analytics' ? 'text-blue-600 border-t-2 border-blue-600' : 'text-muted-foreground'
           }`}
         >
