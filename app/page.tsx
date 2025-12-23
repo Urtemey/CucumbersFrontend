@@ -74,7 +74,15 @@ export default function Home() {
         {currentView === 'details' && selectedComplaintId && (
           <ComplaintDetails complaintId={selectedComplaintId} onBack={handleBackToList} />
         )}
-        {currentView === 'record' && <RecordComplaint />}
+        {currentView === 'record' && (
+          <RecordComplaint
+            onSubmitSuccess={(caseData) => {
+              // Could navigate to the specific case details or just show success
+              console.log('Complaint submitted:', caseData);
+            }}
+            onNavigateToComplaints={() => handleNavigate('complaints')}
+          />
+        )}
         {currentView === 'analytics' && <Analytics />}
       </div>
 

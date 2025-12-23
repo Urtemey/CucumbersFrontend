@@ -7,20 +7,24 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mic, MicOff, Square, Play, Pause, Upload, Send } from 'lucide-react';
-import { ComplaintPriority } from '@/lib/types';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Mic, MicOff, Square, Play, Pause, Upload, Send, CheckCircle, AlertTriangle } from 'lucide-react';
+import {
+  ComplaintPriority,
+  ComplaintCategory,
+  IntakeChannel,
+  ProcessingResult,
+  PRIORITY_DISPLAY_NAMES,
+  CATEGORY_DISPLAY_NAMES
+} from '@/lib/types';
+import { apiClient } from '@/lib/api-client';
 
 interface RecordComplaintProps {
-  onSubmit?: (complaintData: {
-    title: string;
-    description: string;
-    category: string;
-    priority: ComplaintPriority;
-    audioBlob?: Blob;
-  }) => void;
+  onSubmitSuccess?: (caseData: ProcessingResult) => void;
+  onNavigateToComplaints?: () => void;
 }
 
-export function RecordComplaint({ onSubmit }: RecordComplaintProps) {
+export function RecordComplaint({ onSubmitSuccess, onNavigateToComplaints }: RecordComplaintProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -30,9 +34,13 @@ export function RecordComplaint({ onSubmit }: RecordComplaintProps) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    category: '',
-    priority: 'medium' as ComplaintPriority,
+    category: '' as ComplaintCategory | '',
+    priority: ComplaintPriority.NORMAL,
   });
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitResult, setSubmitResult] = useState<ProcessingResult | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -107,24 +115,55 @@ export function RecordComplaint({ onSubmit }: RecordComplaintProps) {
     }
   };
 
-  const handleSubmit = () => {
-    if (onSubmit) {
-      onSubmit({
-        ...formData,
-        audioBlob: audioBlob || undefined,
-      });
-    }
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      let result: ProcessingResult;
+
+      if (audioBlob) {
+        // Convert Blob to File
+        const audioFile = new File([audioBlob], 'audio.wav', { type: 'audio/wav' });
+        // Submit audio complaint
+        result = await apiClient.submitAudioComplaint(audioFile, IntakeChannel.MOBILE_APP);
+      } else {
+        // Submit text complaint
+        const text = formData.description || formData.title;
+        const categoryHint = formData.category || undefined;
+
+        result = await apiClient.submitTextComplaint(
+          text,
+          IntakeChannel.WEB_FORM,
+          categoryHint
+        );
+      }
+
+      setSubmitResult(result);
+
+      if (onSubmitSuccess) {
+        onSubmitSuccess(result);
+      }
 
     // Reset form
     setFormData({
       title: '',
       description: '',
-      category: '',
-      priority: 'medium',
+      category: '' as '',
+      priority: ComplaintPriority.NORMAL,
     });
-    setAudioBlob(null);
-    setAudioUrl(null);
-    setRecordingTime(0);
+      setAudioBlob(null);
+      setAudioUrl(null);
+      setRecordingTime(0);
+
+    } catch (error) {
+      console.error('Error submitting complaint:', error);
+      setSubmitError(error instanceof Error ? error.message : 'Произошла ошибка при отправке');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -133,7 +172,7 @@ export function RecordComplaint({ onSubmit }: RecordComplaintProps) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const canSubmit = formData.title.trim() && (formData.description.trim() || audioBlob);
+  const canSubmit = (formData.title.trim() || formData.description.trim() || audioBlob) && !isSubmitting;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -230,17 +269,17 @@ export function RecordComplaint({ onSubmit }: RecordComplaintProps) {
               <Label htmlFor="category">Категория</Label>
               <Select
                 value={formData.category}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}
+                onValueChange={(value: string) => setFormData(prev => ({ ...prev, category: value as ComplaintCategory | '' }))}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Выберите категорию" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="service">Обслуживание</SelectItem>
-                  <SelectItem value="product">Продукт</SelectItem>
-                  <SelectItem value="technical">Техническая проблема</SelectItem>
-                  <SelectItem value="billing">Оплата</SelectItem>
-                  <SelectItem value="other">Другое</SelectItem>
+                  {Object.values(ComplaintCategory).map(category => (
+                    <SelectItem key={category} value={category}>
+                      {CATEGORY_DISPLAY_NAMES[category]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -255,10 +294,10 @@ export function RecordComplaint({ onSubmit }: RecordComplaintProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Низкий</SelectItem>
-                  <SelectItem value="medium">Средний</SelectItem>
-                  <SelectItem value="high">Высокий</SelectItem>
-                  <SelectItem value="critical">Критический</SelectItem>
+                  <SelectItem value={ComplaintPriority.LOW}>{PRIORITY_DISPLAY_NAMES[ComplaintPriority.LOW]}</SelectItem>
+                  <SelectItem value={ComplaintPriority.NORMAL}>{PRIORITY_DISPLAY_NAMES[ComplaintPriority.NORMAL]}</SelectItem>
+                  <SelectItem value={ComplaintPriority.HIGH}>{PRIORITY_DISPLAY_NAMES[ComplaintPriority.HIGH]}</SelectItem>
+                  <SelectItem value={ComplaintPriority.URGENT}>{PRIORITY_DISPLAY_NAMES[ComplaintPriority.URGENT]}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -284,10 +323,66 @@ export function RecordComplaint({ onSubmit }: RecordComplaintProps) {
               className="w-full flex items-center justify-center space-x-2"
               size="lg"
             >
-              <Send className="w-5 h-5" />
-              <span>Отправить жалобу</span>
+              {isSubmitting ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Отправка...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-5 h-5" />
+                  <span>Отправить жалобу</span>
+                </>
+              )}
             </Button>
           </div>
+
+          {/* Error Display */}
+          {submitError && (
+            <Alert className="mt-4 border-red-200 bg-red-50">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800">
+                {submitError}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Success Display */}
+          {submitResult && (
+            <Alert className="mt-4 border-green-200 bg-green-50">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                <div className="space-y-2">
+                  <p className="font-semibold">Жалоба успешно отправлена!</p>
+                  <div className="text-sm space-y-1">
+                    <p><strong>Номер кейса:</strong> {submitResult.case.id}</p>
+                    {submitResult.case.reporter_pin && (
+                      <p><strong>PIN-код:</strong> {submitResult.case.reporter_pin}</p>
+                    )}
+                    <p><strong>Статус:</strong> {submitResult.case.status_display || submitResult.case.status}</p>
+                    <p><strong>Время обработки:</strong> {submitResult.processing_time.toFixed(2)}s</p>
+                    {submitResult.case.metrics && (
+                      <div className="mt-2">
+                        <p><strong>Категория:</strong> {submitResult.case.metrics.category_display || submitResult.case.metrics.category}</p>
+                        <p><strong>Тональность:</strong> {submitResult.case.metrics.sentiment_display || submitResult.case.metrics.sentiment}</p>
+                        <p><strong>Срочность:</strong> {submitResult.case.metrics.urgency_display || submitResult.case.metrics.urgency}</p>
+                      </div>
+                    )}
+                  </div>
+                  {onNavigateToComplaints && (
+                    <Button
+                      onClick={onNavigateToComplaints}
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                    >
+                      Посмотреть все жалобы
+                    </Button>
+                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
