@@ -275,11 +275,19 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
                     {caseData.text_artifacts.original}
                   </p>
                 </div>
-                {caseData.text_artifacts.neutral && (
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Нейтральная версия:</h3>
-                    <p className="text-foreground whitespace-pre-wrap leading-relaxed italic">
+                {caseData.text_artifacts.neutral && caseData.text_artifacts.neutral !== caseData.text_artifacts.original && (
+                  <div className="pt-4 border-t border-border">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">🤖 Нейтральная версия (AI):</h3>
+                    <p className="text-foreground whitespace-pre-wrap leading-relaxed bg-muted/50 p-4 rounded-lg">
                       {caseData.text_artifacts.neutral}
+                    </p>
+                  </div>
+                )}
+                {caseData.text_artifacts.normalized && caseData.text_artifacts.normalized !== caseData.text_artifacts.original && (
+                  <div className="pt-4 border-t border-border">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">📝 Нормализованная версия:</h3>
+                    <p className="text-foreground whitespace-pre-wrap leading-relaxed bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-lg">
+                      {caseData.text_artifacts.normalized}
                     </p>
                   </div>
                 )}

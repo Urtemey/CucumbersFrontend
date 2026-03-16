@@ -15,11 +15,27 @@ class ApiError extends Error {
   }
 }
 
-export class ComplaintApiClient {
-  private baseUrl: string;
+// Helper function to get API URL dynamically based on current host
+function getApiBaseUrl(): string {
+  // Check environment variable first
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // In browser, use the same host as the frontend but with port 8000
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    return `http://${hostname}:8000`;
+  }
+  
+  // Default for server-side rendering
+  return 'http://localhost:8000';
+}
 
-  constructor(baseUrl: string = 'http://localhost:8000') {
-    this.baseUrl = baseUrl;
+export class ComplaintApiClient {
+  // Get baseUrl dynamically each time to handle SSR -> client hydration
+  private get baseUrl(): string {
+    return getApiBaseUrl();
   }
 
   private async request<T>(
@@ -127,6 +143,13 @@ export class ComplaintApiClient {
   }
 
   /**
+   * Get detailed analytics data
+   */
+  async getAnalytics(): Promise<any> {
+    return this.request('/api/v1/cases/analytics/');
+  }
+
+  /**
    * Update case
    */
   async updateCase(
@@ -186,6 +209,4 @@ export class ComplaintApiClient {
 }
 
 // Export singleton instance
-export const apiClient = new ComplaintApiClient(
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-);
+export const apiClient = new ComplaintApiClient();

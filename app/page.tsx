@@ -30,41 +30,49 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-0">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 pb-20 md:pb-0">
       <div className="max-w-7xl mx-auto p-4 md:p-8">
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex gap-4 mb-8 border-b border-border pb-4">
+        {/* Desktop Navigation - Enhanced */}
+        <nav className="hidden md:flex gap-2 mb-8 p-2 bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm border border-white/20">
           <button
             onClick={() => handleNavigate('dashboard')}
-            className={`px-4 py-2 font-medium transition-colors ${
-              currentView === 'dashboard' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-muted-foreground hover:text-foreground'
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all duration-300 ${
+              currentView === 'dashboard' 
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' 
+                : 'text-muted-foreground hover:text-foreground hover:bg-white/80'
             }`}
           >
-            Панель управления
+            🏠 Панель управления
           </button>
           <button
             onClick={() => handleNavigate('complaints')}
-            className={`px-4 py-2 font-medium transition-colors ${
-              currentView === 'complaints' || currentView === 'details' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-muted-foreground hover:text-foreground'
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all duration-300 ${
+              currentView === 'complaints' || currentView === 'details' 
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' 
+                : 'text-muted-foreground hover:text-foreground hover:bg-white/80'
             }`}
           >
-            Жалобы
+            📋 Жалобы
           </button>
           <button
             onClick={() => handleNavigate('record')}
-            className={`px-4 py-2 font-medium transition-colors ${
-              currentView === 'record' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-muted-foreground hover:text-foreground'
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all duration-300 ${
+              currentView === 'record' 
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' 
+                : 'text-muted-foreground hover:text-foreground hover:bg-white/80'
             }`}
           >
-            Новая жалоба
+            ➕ Новая жалоба
           </button>
           <button
             onClick={() => handleNavigate('analytics')}
-            className={`px-4 py-2 font-medium transition-colors ${
-              currentView === 'analytics' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-muted-foreground hover:text-foreground'
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all duration-300 ${
+              currentView === 'analytics' 
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' 
+                : 'text-muted-foreground hover:text-foreground hover:bg-white/80'
             }`}
           >
-            Аналитика
+            📊 Аналитика
           </button>
         </nav>
 

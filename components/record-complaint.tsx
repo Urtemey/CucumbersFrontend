@@ -10,11 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Mic, MicOff, Square, Play, Pause, Upload, Send, CheckCircle, AlertTriangle } from 'lucide-react';
 import {
-  ComplaintPriority,
   ComplaintCategory,
   IntakeChannel,
   ProcessingResult,
-  PRIORITY_DISPLAY_NAMES,
   CATEGORY_DISPLAY_NAMES
 } from '@/lib/types';
 import { apiClient } from '@/lib/api-client';
@@ -35,7 +33,6 @@ export function RecordComplaint({ onSubmitSuccess, onNavigateToComplaints }: Rec
     title: '',
     description: '',
     category: '' as ComplaintCategory | '',
-    priority: ComplaintPriority.NORMAL,
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -152,7 +149,6 @@ export function RecordComplaint({ onSubmitSuccess, onNavigateToComplaints }: Rec
       title: '',
       description: '',
       category: '' as '',
-      priority: ComplaintPriority.NORMAL,
     });
       setAudioBlob(null);
       setAudioUrl(null);
@@ -284,23 +280,6 @@ export function RecordComplaint({ onSubmitSuccess, onNavigateToComplaints }: Rec
               </Select>
             </div>
 
-            <div>
-              <Label htmlFor="priority">Приоритет</Label>
-              <Select
-                value={formData.priority}
-                onValueChange={(value: ComplaintPriority) => setFormData(prev => ({ ...prev, priority: value }))}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ComplaintPriority.LOW}>{PRIORITY_DISPLAY_NAMES[ComplaintPriority.LOW]}</SelectItem>
-                  <SelectItem value={ComplaintPriority.NORMAL}>{PRIORITY_DISPLAY_NAMES[ComplaintPriority.NORMAL]}</SelectItem>
-                  <SelectItem value={ComplaintPriority.HIGH}>{PRIORITY_DISPLAY_NAMES[ComplaintPriority.HIGH]}</SelectItem>
-                  <SelectItem value={ComplaintPriority.URGENT}>{PRIORITY_DISPLAY_NAMES[ComplaintPriority.URGENT]}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
 
             <div>
               <Label htmlFor="description">Описание (необязательно, если есть аудиозапись)</Label>
