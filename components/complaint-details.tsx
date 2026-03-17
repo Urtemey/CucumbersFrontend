@@ -2,12 +2,25 @@
 
 import { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { OPERATORS } from '@/lib/operators';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
 import {
   CaseResponse,
   CaseStatus,
@@ -35,10 +48,12 @@ interface ComplaintDetailsProps {
 }
 
 export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps) {
+  const { toast } = useToast();
   const [caseData, setCaseData] = useState<CaseResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   const [newMessage, setNewMessage] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<CaseStatus | ''>('');
@@ -88,10 +103,15 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
       if (Object.keys(updates).length > 0) {
         const updatedCase = await apiClient.updateCase(caseData.id, updates);
         setCaseData(updatedCase);
+        toast({ title: 'Кейс обновлён' });
+      } else {
+        toast({ title: 'Нет изменений для сохранения' });
       }
     } catch (err) {
       console.error('Error updating case:', err);
-      setError(err instanceof Error ? err.message : 'Ошибка обновления кейса');
+      const msg = err instanceof Error ? err.message : 'Ошибка обновления кейса';
+      setError(msg);
+      toast({ variant: 'destructive', title: 'Ошибка', description: msg });
     } finally {
       setUpdating(false);
     }
@@ -100,9 +120,32 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
   const handleSendMessage = async () => {
     if (!caseData || !newMessage.trim()) return;
 
-    // Note: This would need to be implemented in the API client
-    // For now, just clear the message
-    setNewMessage('');
+    try {
+      setSendingMessage(true);
+      const sent = await apiClient.sendOperatorMessage(caseData.id, newMessage.trim());
+      // Optimistic update — append message locally
+      setCaseData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          messages: [
+            ...(prev.messages || []),
+            {
+              id: sent.id,
+              content: sent.content,
+              is_from_reporter: false,
+              created_at: sent.created_at,
+            },
+          ],
+        };
+      });
+      setNewMessage('');
+    } catch (err) {
+      console.error('Error sending message:', err);
+      toast({ variant: 'destructive', title: 'Ошибка', description: 'Не удалось отправить сообщение' });
+    } finally {
+      setSendingMessage(false);
+    }
   };
 
   const handleResolveCase = async () => {
@@ -150,15 +193,13 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
     );
   }
 
-  const getSentimentIcon = (sentiment: SentimentLevel) => {
+  const getSentimentLabel = (sentiment: SentimentLevel) => {
     switch (sentiment) {
-      case SentimentLevel.VERY_NEGATIVE:
-      case SentimentLevel.NEGATIVE:
-        return '😞';
-      case SentimentLevel.NEUTRAL:
-        return '😐';
-      case SentimentLevel.POSITIVE:
-        return '😊';
+      case SentimentLevel.VERY_NEGATIVE: return 'Очень негативная';
+      case SentimentLevel.NEGATIVE:      return 'Негативная';
+      case SentimentLevel.NEUTRAL:       return 'Нейтральная';
+      case SentimentLevel.POSITIVE:      return 'Позитивная';
+      default:                           return sentiment;
     }
   };
 
@@ -277,7 +318,7 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
                 </div>
                 {caseData.text_artifacts.neutral && caseData.text_artifacts.neutral !== caseData.text_artifacts.original && (
                   <div className="pt-4 border-t border-border">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-2">🤖 Нейтральная версия (AI):</h3>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Нейтральная версия:</h3>
                     <p className="text-foreground whitespace-pre-wrap leading-relaxed bg-muted/50 p-4 rounded-lg">
                       {caseData.text_artifacts.neutral}
                     </p>
@@ -285,7 +326,7 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
                 )}
                 {caseData.text_artifacts.normalized && caseData.text_artifacts.normalized !== caseData.text_artifacts.original && (
                   <div className="pt-4 border-t border-border">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-2">📝 Нормализованная версия:</h3>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Нормализованная версия:</h3>
                     <p className="text-foreground whitespace-pre-wrap leading-relaxed bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-lg">
                       {caseData.text_artifacts.normalized}
                     </p>
@@ -340,10 +381,9 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
                 {/* Sentiment Analysis */}
                 <div>
                   <h4 className="font-medium mb-3">Тональность</h4>
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-2xl">{getSentimentIcon(caseData.metrics.sentiment)}</span>
+                  <div className="flex items-center gap-2 mb-2">
                     <span className="font-medium" style={{ color: getSentimentColor(caseData.metrics.sentiment) }}>
-                      {caseData.metrics.sentiment_display}
+                      {getSentimentLabel(caseData.metrics.sentiment)}
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground">
@@ -468,9 +508,13 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
               <div className="flex justify-end">
                 <Button
                   onClick={handleSendMessage}
-                  disabled={!newMessage.trim()}
+                  disabled={!newMessage.trim() || sendingMessage}
                 >
-                  <Send className="w-4 h-4 mr-2" />
+                  {sendingMessage ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4 mr-2" />
+                  )}
                   Отправить
                 </Button>
               </div>
@@ -493,7 +537,10 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
                       <SelectItem value={CaseStatus.IN_REVIEW}>На рассмотрении</SelectItem>
                       <SelectItem value={CaseStatus.ASSIGNED}>Назначена</SelectItem>
                       <SelectItem value={CaseStatus.IN_PROGRESS}>В работе</SelectItem>
+                      <SelectItem value={CaseStatus.PENDING_INFO}>Ждёт информации</SelectItem>
                       <SelectItem value={CaseStatus.RESOLVED}>Решена</SelectItem>
+                      <SelectItem value={CaseStatus.CLOSED}>Закрыта</SelectItem>
+                      <SelectItem value={CaseStatus.REJECTED}>Отклонена</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -522,10 +569,11 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Не назначен</SelectItem>
-                    <SelectItem value="Иван Петров">Иван Петров</SelectItem>
-                    <SelectItem value="Мария Иванова">Мария Иванова</SelectItem>
-                    <SelectItem value="Алексей Сидоров">Алексей Сидоров</SelectItem>
-                    <SelectItem value="Ольга Кузнецова">Ольга Кузнецова</SelectItem>
+                    {OPERATORS.map((op) => (
+                      <SelectItem key={op.id} value={op.id}>
+                        {op.name} ({op.department})
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -547,14 +595,26 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
                 </Button>
 
                 {caseData.status !== CaseStatus.RESOLVED && caseData.status !== CaseStatus.CLOSED && (
-                  <Button
-                    onClick={handleResolveCase}
-                    disabled={updating}
-                    variant="outline"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Закрыть кейс
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button disabled={updating} variant="outline">
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Закрыть кейс
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Закрыть кейс?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Кейс будет помечен как решённый. Это действие можно отменить, изменив статус вручную.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Отмена</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleResolveCase}>Закрыть</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 )}
               </div>
             </div>
@@ -619,7 +679,7 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
           </Card>
 
           {/* Quick Stats */}
-          <Card className="p-4 bg-blue-50 border-blue-200">
+          <Card className="p-4">
             <h4 className="font-semibold text-sm mb-3">Статистика обработки</h4>
             <div className="space-y-2 text-xs">
               <p className="text-muted-foreground">
@@ -643,16 +703,13 @@ export function ComplaintDetails({ complaintId, onBack }: ComplaintDetailsProps)
 
           {/* PIN Code */}
           {caseData.reporter_pin && (
-            <Card className="p-4 bg-yellow-50 border-yellow-200">
-              <h4 className="font-semibold text-sm mb-2 flex items-center">
-                <AlertTriangle className="w-4 h-4 mr-2 text-yellow-600" />
-                PIN-код репортера
-              </h4>
-              <p className="font-mono text-lg font-bold text-yellow-800">
+            <Card className="p-4">
+              <h4 className="font-semibold text-sm mb-2">PIN-код заявителя</h4>
+              <p className="font-mono text-lg font-bold text-foreground tracking-widest">
                 {caseData.reporter_pin}
               </p>
-              <p className="text-xs text-yellow-700 mt-1">
-                Репортер может использовать этот PIN для отслеживания кейса
+              <p className="text-xs text-muted-foreground mt-1">
+                Заявитель использует этот PIN для отслеживания статуса
               </p>
             </Card>
           )}

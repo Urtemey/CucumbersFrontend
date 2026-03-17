@@ -117,24 +117,38 @@ export interface Complaint {
 }
 ```
 
-## Color Scheme
+## Design System
+
+Design language: minimal, data-dense, monochromatic. Inspired by Linear/Vercel.
 
 ```
-Priority Colors:
-- Critical: #E74C3C (red)
-- High: #FFA500 (orange)
-- Medium: #FFC107 (yellow)
-- Low: #50C878 (green)
+Palette (CSS variables, OKLCH):
+- Background:   oklch(0.972 0.004 250)  — nearly white
+- Card/Surface: oklch(1 0 0)            — pure white
+- Foreground:   oklch(0.145 0.01 250)   — near-black
+- Muted text:   oklch(0.55 0.012 250)   — gray
+- Border:       oklch(0.885 0.008 250)  — subtle
 
-Status Colors:
-- New: #4A90E2 (blue)
-- In Progress: #FFA500 (orange)
-- Resolved: #50C878 (green)
+Priority colors:
+- Urgent: bg-red-500    (#ef4444)
+- High:   bg-amber-500  (#f59e0b)
+- Normal: bg-blue-500   (#3b82f6)
+- Low:    bg-slate-400  (#94a3b8)
 
-Brand:
-- Primary: #4A90E2
-- Background: #F5F7FA
+Status badge styles:
+- New:        text-blue-700  / bg-blue-50  / border-blue-200
+- In progress: text-amber-700 / bg-amber-50 / border-amber-200
+- Resolved:   text-green-700 / bg-green-50 / border-green-200
+- Rejected:   text-red-700   / bg-red-50   / border-red-200
 ```
+
+Rules:
+- No emoji in UI elements (use lucide-react icons only)
+- No gradient text (bg-clip-text)
+- No rainbow gradient cards
+- No translateY hover effects — only border/shadow transitions
+- Default Button = dark (bg-foreground text-background)
+- Active sidebar item = bg-foreground text-background
 
 ## Commands
 

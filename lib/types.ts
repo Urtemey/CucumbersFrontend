@@ -122,6 +122,7 @@ export interface CaseResponse {
   reporter_pin?: string;
   created_at: string;
   updated_at: string;
+  resolved_at?: string;
   sla_deadline?: string;
   is_sla_breached: boolean;
   sla_remaining_hours?: number;
@@ -173,30 +174,28 @@ export interface DashboardStats {
   daily_trend: Record<string, any>[];
 }
 
-// Legacy types for backward compatibility (deprecated)
-export type ComplaintStatus = 'new' | 'in_progress' | 'resolved';
-export type ComplaintPriorityLegacy = 'critical' | 'high' | 'medium' | 'low';
-export type SentimentType = 'positive' | 'neutral' | 'negative';
-
-export interface ActionHistoryItem {
-  timestamp: string;
-  action: string;
-  actor?: string;
+export interface DayTrend {
+  date: string;
+  total: number;
+  resolved: number;
+  new: number;
+  inProgress: number;
 }
 
-export interface Complaint {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  priority: ComplaintPriorityLegacy;
-  status: ComplaintStatus;
-  sentiment: SentimentType;
-  sentimentScore: number;
-  createdAt: string;
-  robotLocation: string;
-  assignedTo?: string;
-  adminResponse?: string;
-  resolvedAt?: string;
-  actionHistory: ActionHistoryItem[];
+export interface NameValuePair {
+  name: string;
+  value: number;
 }
+
+export interface AnalyticsResponse {
+  total_complaints: number;
+  resolved_complaints: number;
+  resolution_rate: number;
+  average_sentiment_score: number;
+  average_resolution_time: number;
+  complaints_by_day: DayTrend[];
+  complaints_by_category: NameValuePair[];
+  sentiment_data: NameValuePair[];
+  priority_data: NameValuePair[];
+}
+

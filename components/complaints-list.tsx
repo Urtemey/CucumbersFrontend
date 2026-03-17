@@ -1,16 +1,68 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { CaseResponse, CaseStatus, ComplaintPriority, CaseListResponse, PRIORITY_DISPLAY_NAMES } from '@/lib/types';
-import { Card } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ComplaintsListProps {
   onSelectComplaint: (id: string) => void;
 }
+
+const STATUS_LABELS: Record<string, string> = {
+  [CaseStatus.NEW]:          'Новая',
+  [CaseStatus.IN_REVIEW]:    'На рассмотрении',
+  [CaseStatus.ASSIGNED]:     'Назначена',
+  [CaseStatus.IN_PROGRESS]:  'В работе',
+  [CaseStatus.PENDING_INFO]: 'Ожидает информации',
+  [CaseStatus.RESOLVED]:     'Решена',
+  [CaseStatus.CLOSED]:       'Закрыта',
+  [CaseStatus.REJECTED]:     'Отклонена',
+};
+
+function getPriorityDot(priority: ComplaintPriority) {
+  switch (priority) {
+    case ComplaintPriority.URGENT: return 'bg-red-500';
+    case ComplaintPriority.HIGH:   return 'bg-amber-500';
+    case ComplaintPriority.NORMAL: return 'bg-blue-500';
+    case ComplaintPriority.LOW:    return 'bg-slate-400';
+    default:                       return 'bg-slate-300';
+  }
+}
+
+function getStatusStyle(status: CaseStatus) {
+  switch (status) {
+    case CaseStatus.NEW:
+      return 'text-blue-700 bg-blue-50 border-blue-200';
+    case CaseStatus.IN_REVIEW:
+    case CaseStatus.ASSIGNED:
+    case CaseStatus.IN_PROGRESS:
+      return 'text-amber-700 bg-amber-50 border-amber-200';
+    case CaseStatus.RESOLVED:
+    case CaseStatus.CLOSED:
+      return 'text-green-700 bg-green-50 border-green-200';
+    case CaseStatus.REJECTED:
+      return 'text-red-700 bg-red-50 border-red-200';
+    default:
+      return 'text-slate-600 bg-slate-50 border-slate-200';
+  }
+}
+
+const STATUS_FILTERS = [
+  { value: 'all',                      label: 'Все' },
+  { value: CaseStatus.NEW,             label: 'Новые' },
+  { value: CaseStatus.IN_PROGRESS,     label: 'В работе' },
+  { value: CaseStatus.RESOLVED,        label: 'Решены' },
+];
+
+const PRIORITY_FILTERS = [
+  { value: 'all',                        label: 'Все' },
+  { value: ComplaintPriority.URGENT,     label: 'Критические' },
+  { value: ComplaintPriority.HIGH,       label: 'Высокие' },
+  { value: ComplaintPriority.NORMAL,     label: 'Средние' },
+  { value: ComplaintPriority.LOW,        label: 'Низкие' },
+];
 
 export function ComplaintsList({ onSelectComplaint }: ComplaintsListProps) {
   const [cases, setCases] = useState<CaseResponse[]>([]);
@@ -21,302 +73,242 @@ export function ComplaintsList({ onSelectComplaint }: ComplaintsListProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadCases = async (page: number = 1) => {
+  // Debounce search input
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(value), 400);
+  };
+
+  const loadCases = async (page: number = 1, search?: string) => {
     try {
       setLoading(true);
       setError(null);
-
       const response: CaseListResponse = await apiClient.getCases(
         page,
-        20, // pageSize
+        20,
         statusFilter === 'all' ? undefined : statusFilter,
-        priorityFilter === 'all' ? undefined : priorityFilter
+        priorityFilter === 'all' ? undefined : priorityFilter,
+        undefined,
+        search || undefined
       );
-
       setCases(response.items);
       setCurrentPage(response.page);
       setTotalPages(Math.ceil(response.total / response.page_size));
     } catch (err) {
-      console.error('Error loading cases:', err);
-      setError(err instanceof Error ? err.message : 'Ошибка загрузки жалоб');
+      setError(err instanceof Error ? err.message : 'Ошибка загрузки обращений');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadCases();
+    setCurrentPage(1);
+    loadCases(1);
   }, [statusFilter, priorityFilter]);
 
-  const filteredCases = cases.filter(caseItem => {
-    if (!searchTerm) return true;
+  useEffect(() => {
+    setCurrentPage(1);
+    loadCases(1, debouncedSearch);
+  }, [debouncedSearch]);
 
-    const searchLower = searchTerm.toLowerCase();
-    const title = caseItem.id; // Case ID as title for now
-    const description = caseItem.text_artifacts?.original || '';
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
-    return title.toLowerCase().includes(searchLower) ||
-           description.toLowerCase().includes(searchLower);
-  });
-
-  const getPriorityColor = (priority: ComplaintPriority) => {
-    switch (priority) {
-      case ComplaintPriority.URGENT:
-        return '#E74C3C';
-      case ComplaintPriority.HIGH:
-        return '#FFA500';
-      case ComplaintPriority.NORMAL:
-        return '#FFC107';
-      case ComplaintPriority.LOW:
-        return '#50C878';
-    }
-  };
-
-  const getStatusBadge = (status: CaseStatus) => {
-    switch (status) {
-      case CaseStatus.NEW:
-        return 'bg-blue-100 text-blue-800';
-      case CaseStatus.IN_REVIEW:
-      case CaseStatus.ASSIGNED:
-      case CaseStatus.IN_PROGRESS:
-        return 'bg-orange-100 text-orange-800';
-      case CaseStatus.RESOLVED:
-      case CaseStatus.CLOSED:
-        return 'bg-green-100 text-green-800';
-      case CaseStatus.REJECTED:
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusLabel = (status: CaseStatus) => {
-    switch (status) {
-      case CaseStatus.NEW:
-        return 'Новая';
-      case CaseStatus.IN_REVIEW:
-        return 'На рассмотрении';
-      case CaseStatus.ASSIGNED:
-        return 'Назначена';
-      case CaseStatus.IN_PROGRESS:
-        return 'В работе';
-      case CaseStatus.PENDING_INFO:
-        return 'Ожидает информации';
-      case CaseStatus.RESOLVED:
-        return 'Решена';
-      case CaseStatus.CLOSED:
-        return 'Закрыта';
-      case CaseStatus.REJECTED:
-        return 'Отклонена';
-      default:
-        return status;
-    }
-  };
-
-  const getPriorityLabel = (priority: ComplaintPriority) => {
-    return PRIORITY_DISPLAY_NAMES[priority] || priority;
-  };
-
-  // Calculate status counts from loaded cases
-  const statusCounts = cases.reduce((acc, caseItem) => {
-    const status = caseItem.status;
-    acc[status] = (acc[status] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  statusCounts.all = cases.length;
+  const filteredCases = cases;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-balance text-3xl font-bold tracking-tight">Жалобы</h1>
-          <p className="text-muted-foreground mt-2">Управление и отслеживание жалоб клиентов</p>
+          <h1 className="text-xl font-semibold text-foreground">Обращения</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Управление и отслеживание</p>
         </div>
         <Button
-          onClick={() => loadCases(currentPage)}
+          onClick={() => loadCases(currentPage, debouncedSearch)}
           disabled={loading}
           variant="outline"
           size="sm"
         >
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
           Обновить
         </Button>
       </div>
 
-      {/* Error Display */}
+      {/* Error */}
       {error && (
-        <Alert className="border-red-200 bg-red-50">
-          <AlertTriangle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">
-            {error}
-          </AlertDescription>
-        </Alert>
+        <div className="flex items-center gap-2.5 px-4 py-3 rounded-lg border border-destructive/30 bg-destructive/5 text-sm text-destructive">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {error}
+        </div>
       )}
 
-      {/* Search */}
-      <input
-        type="text"
-        placeholder="Поиск по ID кейса или тексту..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      {/* Toolbar */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Search */}
+          <input
+            type="text"
+            placeholder="Поиск по ID или тексту..."
+            value={searchTerm}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="flex-1 min-w-0 h-9 px-3 text-sm border border-border rounded-md bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          />
 
-      {/* Status Filters */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setStatusFilter('all')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            statusFilter === 'all'
-              ? 'text-white'
-              : 'bg-muted text-foreground hover:bg-muted/80'
-          }`}
-          style={statusFilter === 'all' ? { backgroundColor: '#4A90E2' } : {}}
-        >
-          Все ({statusCounts.all || 0})
-        </button>
-        <button
-          onClick={() => setStatusFilter(CaseStatus.NEW)}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            statusFilter === CaseStatus.NEW
-              ? 'text-white'
-              : 'bg-muted text-foreground hover:bg-muted/80'
-          }`}
-          style={statusFilter === CaseStatus.NEW ? { backgroundColor: '#4A90E2' } : {}}
-        >
-          Новые ({statusCounts[CaseStatus.NEW] || 0})
-        </button>
-        <button
-          onClick={() => setStatusFilter(CaseStatus.IN_PROGRESS)}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            statusFilter === CaseStatus.IN_PROGRESS
-              ? 'text-white'
-              : 'bg-muted text-foreground hover:bg-muted/80'
-          }`}
-          style={statusFilter === CaseStatus.IN_PROGRESS ? { backgroundColor: '#4A90E2' } : {}}
-        >
-          В работе ({statusCounts[CaseStatus.IN_PROGRESS] || 0})
-        </button>
-        <button
-          onClick={() => setStatusFilter(CaseStatus.RESOLVED)}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            statusFilter === CaseStatus.RESOLVED
-              ? 'text-white'
-              : 'bg-muted text-foreground hover:bg-muted/80'
-          }`}
-          style={statusFilter === CaseStatus.RESOLVED ? { backgroundColor: '#4A90E2' } : {}}
-        >
-          Решены ({statusCounts[CaseStatus.RESOLVED] || 0})
-        </button>
+          {/* Status filter tabs */}
+          <div className="flex items-center gap-1 p-1 bg-muted rounded-md">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setStatusFilter(f.value)}
+                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                  statusFilter === f.value
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Priority filter tabs */}
+        <div className="flex items-center gap-1 p-1 bg-muted rounded-md self-start">
+          {PRIORITY_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setPriorityFilter(f.value)}
+              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                priorityFilter === f.value
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Cases List */}
-      <div className="space-y-3">
+      {/* Table */}
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
         {loading ? (
-          <Card className="p-8 text-center">
-            <div className="flex items-center justify-center space-x-2">
-              <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
-              <p className="text-muted-foreground font-medium">Загрузка жалоб...</p>
-            </div>
-          </Card>
+          <div className="divide-y divide-border">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex items-center gap-4 px-5 py-3.5">
+                <div className="w-4 h-4 skeleton rounded-full" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-4 w-32 skeleton rounded" />
+                  <div className="h-3 w-64 skeleton rounded" />
+                </div>
+                <div className="h-5 w-20 skeleton rounded" />
+              </div>
+            ))}
+          </div>
         ) : filteredCases.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-2xl mb-2">🎉</p>
-            <p className="text-muted-foreground font-medium">
-              {cases.length === 0 ? 'Жалоб пока нет' : 'Жалоб по выбранным фильтрам не найдено'}
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-sm font-medium text-foreground">
+              {cases.length === 0 ? 'Обращений пока нет' : 'Ничего не найдено'}
             </p>
-            <Button
-              onClick={() => loadCases(1)}
-              className="mt-4"
-            >
-              Обновить
-            </Button>
-          </Card>
+            <p className="text-xs text-muted-foreground mt-1">
+              {cases.length === 0
+                ? 'После первого обращения оно появится здесь'
+                : 'Попробуйте изменить фильтры или поисковый запрос'}
+            </p>
+            {cases.length === 0 && (
+              <Button onClick={() => loadCases(1, debouncedSearch)} variant="outline" size="sm" className="mt-4">
+                Обновить
+              </Button>
+            )}
+          </div>
         ) : (
-          filteredCases.map(caseItem => (
-            <Card
-              key={caseItem.id}
-              onClick={() => onSelectComplaint(caseItem.id)}
-              className="p-4 cursor-pointer hover:shadow-md transition-all hover:border-blue-300"
-            >
-              <div className="flex gap-4">
-                <div
-                  className="w-4 h-4 rounded-full flex-shrink-0 mt-1"
-                  style={{ backgroundColor: getPriorityColor(caseItem.priority) }}
-                />
+          <div className="divide-y divide-border">
+            {filteredCases.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => onSelectComplaint(c.id)}
+                className="w-full flex items-start gap-4 px-5 py-3.5 hover:bg-accent transition-colors text-left group"
+              >
+                {/* Priority indicator */}
+                <span className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${getPriorityDot(c.priority)}`} />
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-foreground truncate">
-                        Кейс #{caseItem.id}
-                      </h3>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {caseItem.metrics?.category_display || 'Категория не определена'}
-                      </p>
-                      {caseItem.text_artifacts?.original && (
-                        <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                          {caseItem.text_artifacts.original.substring(0, 150)}...
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-2 flex-shrink-0">
-                      <span className={`text-xs font-medium px-2 py-1 rounded ${getStatusBadge(caseItem.status)}`}>
-                        {getStatusLabel(caseItem.status)}
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs font-mono text-muted-foreground">
+                      #{c.id.slice(0, 8)}
+                    </span>
+                    {c.is_sla_breached && (
+                      <span className="text-[10px] font-medium text-red-600 border border-red-200 bg-red-50 px-1.5 py-0.5 rounded">
+                        SLA
                       </span>
-                    </div>
+                    )}
                   </div>
 
-                  {/* Meta Info */}
-                  <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                    <span>🕐 {new Date(caseItem.created_at).toLocaleString('ru-RU')}</span>
-                    <span>•</span>
-                    <span>Приоритет: {getPriorityLabel(caseItem.priority)}</span>
-                    {caseItem.metrics && (
+                  {c.text_artifacts?.original && (
+                    <p className="text-sm text-foreground line-clamp-1 leading-snug">
+                      {c.text_artifacts.original}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                    <span>{c.metrics?.category_display || 'Категория не определена'}</span>
+                    <span>·</span>
+                    <span>{PRIORITY_DISPLAY_NAMES[c.priority] || c.priority}</span>
+                    {c.metrics?.sentiment_display && (
                       <>
-                        <span>•</span>
-                        <span>Тональность: {caseItem.metrics.sentiment_display}</span>
+                        <span>·</span>
+                        <span>{c.metrics.sentiment_display}</span>
                       </>
                     )}
-                    {caseItem.is_sla_breached && (
-                      <>
-                        <span>•</span>
-                        <span className="text-red-600 font-medium">SLA нарушен</span>
-                      </>
-                    )}
+                    <span>·</span>
+                    <span>{new Date(c.created_at).toLocaleDateString('ru-RU')}</span>
                   </div>
                 </div>
-              </div>
-            </Card>
-          ))
+
+                {/* Status badge */}
+                <span className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded border mt-0.5 ${getStatusStyle(c.status)}`}>
+                  {STATUS_LABELS[c.status] || c.status}
+                </span>
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-6">
-          <Button
-            onClick={() => loadCases(currentPage - 1)}
-            disabled={currentPage <= 1 || loading}
-            variant="outline"
-            size="sm"
-          >
-            Назад
-          </Button>
-          <span className="px-4 py-2 text-sm text-muted-foreground">
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-xs text-muted-foreground">
             Страница {currentPage} из {totalPages}
-          </span>
-          <Button
-            onClick={() => loadCases(currentPage + 1)}
-            disabled={currentPage >= totalPages || loading}
-            variant="outline"
-            size="sm"
-          >
-            Далее
-          </Button>
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              onClick={() => loadCases(currentPage - 1, debouncedSearch)}
+              disabled={currentPage <= 1 || loading}
+              variant="outline"
+              size="sm"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => loadCases(currentPage + 1, debouncedSearch)}
+              disabled={currentPage >= totalPages || loading}
+              variant="outline"
+              size="sm"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       )}
     </div>

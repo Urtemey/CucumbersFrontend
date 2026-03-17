@@ -4,6 +4,7 @@ import {
   CaseCreateRequest,
   ProcessingResult,
   DashboardStats,
+  AnalyticsResponse,
   IntakeChannel,
   ComplaintCategory
 } from './types';
@@ -40,24 +41,37 @@ export class ComplaintApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    timeoutMs: number = 30000
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    });
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        ...options,
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new ApiError(response.status, `API Error: ${response.status} ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new ApiError(response.status, `API Error: ${response.status} ${errorText}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new ApiError(0, 'Превышено время ожидания ответа от сервера');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return response.json();
   }
 
   /**
@@ -93,17 +107,30 @@ export class ComplaintApiClient {
     formData.append('audio_file', audioFile);
     formData.append('channel', channel);
 
-    const response = await fetch(`${this.baseUrl}/api/v1/intake/audio`, {
-      method: 'POST',
-      body: formData,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new ApiError(response.status, `API Error: ${response.status} ${errorText}`);
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/intake/audio`, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new ApiError(response.status, `API Error: ${response.status} ${errorText}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new ApiError(0, 'Превышено время ожидания обработки аудио');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return response.json();
   }
 
   /**
@@ -114,7 +141,8 @@ export class ComplaintApiClient {
     pageSize: number = 20,
     status?: string,
     priority?: string,
-    category?: string
+    category?: string,
+    search?: string
   ): Promise<CaseListResponse> {
     const params = new URLSearchParams({
       page: page.toString(),
@@ -124,6 +152,7 @@ export class ComplaintApiClient {
     if (status) params.append('status', status);
     if (priority) params.append('priority', priority);
     if (category) params.append('category', category);
+    if (search) params.append('search', search);
 
     return this.request<CaseListResponse>(`/api/v1/cases/?${params}`);
   }
@@ -145,8 +174,8 @@ export class ComplaintApiClient {
   /**
    * Get detailed analytics data
    */
-  async getAnalytics(): Promise<any> {
-    return this.request('/api/v1/cases/analytics/');
+  async getAnalytics(): Promise<AnalyticsResponse> {
+    return this.request<AnalyticsResponse>('/api/v1/cases/analytics/');
   }
 
   /**
@@ -184,7 +213,7 @@ export class ComplaintApiClient {
       params.append('department', department);
     }
 
-    return this.request(`/api/v1/cases/${caseId}/assign?${params}`, {
+    return this.request<{ message: string; case: CaseResponse }>(`/api/v1/cases/${caseId}/assign?${params}`, {
       method: 'POST',
     });
   }
@@ -202,8 +231,31 @@ export class ComplaintApiClient {
       params.append('resolution_note', resolutionNote);
     }
 
-    return this.request(`/api/v1/cases/${caseId}/resolve?${params}`, {
+    return this.request<{ message: string; case: CaseResponse }>(`/api/v1/cases/${caseId}/resolve?${params}`, {
       method: 'POST',
+    });
+  }
+
+  /**
+   * Send operator message to a case
+   */
+  async sendOperatorMessage(
+    caseId: string,
+    content: string,
+    operatorId: string = 'operator',
+    operatorToken?: string
+  ): Promise<{ id: string; content: string; is_from_reporter: boolean; created_at: string }> {
+    const params = new URLSearchParams({ operator_id: operatorId });
+
+    const headers: Record<string, string> = {};
+    if (operatorToken) {
+      headers['X-Operator-Token'] = operatorToken;
+    }
+
+    return this.request<{ id: string; content: string; is_from_reporter: boolean; created_at: string }>(`/api/v1/chat/${caseId}/operator/message?${params}`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+      headers,
     });
   }
 }

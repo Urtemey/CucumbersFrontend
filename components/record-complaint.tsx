@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Mic, MicOff, Square, Play, Pause, Upload, Send, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Mic, Square, Play, Pause, Upload, Send, CheckCircle, AlertTriangle } from 'lucide-react';
 import {
   ComplaintCategory,
   IntakeChannel,
@@ -23,6 +23,7 @@ interface RecordComplaintProps {
 }
 
 export function RecordComplaint({ onSubmitSuccess, onNavigateToComplaints }: RecordComplaintProps) {
+  const { toast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -43,6 +44,14 @@ export function RecordComplaint({ onSubmitSuccess, onNavigateToComplaints }: Rec
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Cleanup on unmount: revoke blob URLs, clear interval
+  useEffect(() => {
+    return () => {
+      if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    };
+  }, []);
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -57,6 +66,7 @@ export function RecordComplaint({ onSubmitSuccess, onNavigateToComplaints }: Rec
 
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'audio/wav' });
+        if (audioUrl) URL.revokeObjectURL(audioUrl);
         const url = URL.createObjectURL(blob);
         setAudioBlob(blob);
         setAudioUrl(url);
@@ -74,7 +84,11 @@ export function RecordComplaint({ onSubmitSuccess, onNavigateToComplaints }: Rec
 
     } catch (error) {
       console.error('Error starting recording:', error);
-      alert('Не удалось начать запись. Проверьте разрешения на доступ к микрофону.');
+      toast({
+        variant: 'destructive',
+        title: 'Ошибка записи',
+        description: 'Не удалось начать запись. Проверьте разрешения на доступ к микрофону.',
+      });
     }
   };
 
@@ -105,6 +119,7 @@ export function RecordComplaint({ onSubmitSuccess, onNavigateToComplaints }: Rec
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type.startsWith('audio/')) {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
       const url = URL.createObjectURL(file);
       setAudioBlob(file);
       setAudioUrl(url);
@@ -318,19 +333,18 @@ export function RecordComplaint({ onSubmitSuccess, onNavigateToComplaints }: Rec
 
           {/* Error Display */}
           {submitError && (
-            <Alert className="mt-4 border-red-200 bg-red-50">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-800">
-                {submitError}
-              </AlertDescription>
-            </Alert>
+            <div className="mt-4 flex items-start gap-2.5 px-4 py-3 rounded-lg border border-destructive/30 bg-destructive/5 text-sm text-destructive">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              {submitError}
+            </div>
           )}
 
           {/* Success Display */}
           {submitResult && (
-            <Alert className="mt-4 border-green-200 bg-green-50">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
+            <div className="mt-4 border border-green-200 bg-green-50 rounded-lg p-4">
+              <div className="flex items-start gap-2.5">
+              <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+              <div className="text-green-800 text-sm w-full">
                 <div className="space-y-2">
                   <p className="font-semibold">Жалоба успешно отправлена!</p>
                   <div className="text-sm space-y-1">
@@ -355,27 +369,24 @@ export function RecordComplaint({ onSubmitSuccess, onNavigateToComplaints }: Rec
                       size="sm"
                       className="mt-2"
                     >
-                      Посмотреть все жалобы
+                      Все обращения
                     </Button>
                   )}
                 </div>
-              </AlertDescription>
-            </Alert>
+              </div>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
 
       {/* Info Card */}
-      <Card className="bg-blue-50 border-blue-200">
+      <Card>
         <CardContent className="pt-6">
-          <div className="text-sm text-blue-800">
-            <h4 className="font-semibold mb-2">Информация:</h4>
-            <ul className="space-y-1">
-              <li>• Вы можете записать аудио или загрузить существующий файл</li>
-              <li>• Обязательно заполните заголовок</li>
-              <li>• Добавьте описание или используйте только аудиозапись</li>
-              <li>• Ваша жалоба будет обработана ИИ для автоматической категоризации</li>
-            </ul>
+          <div className="text-sm text-muted-foreground space-y-1">
+            <p>Можно записать аудио или загрузить существующий файл.</p>
+            <p>Заголовок обязателен. Описание опционально при наличии аудио.</p>
+            <p>После отправки система автоматически категоризирует обращение.</p>
           </div>
         </CardContent>
       </Card>

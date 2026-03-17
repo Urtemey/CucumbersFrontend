@@ -1,15 +1,15 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Geist } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { ThemeProvider } from '@/components/theme-provider'
+import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const geist = Geist({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Система управления жалобами',
-  description: 'Умная система сбора и управления жалобами клиентов',
-  generator: 'v0.app',
+  title: 'Система управления обращениями',
+  description: 'Платформа для приёма, обработки и управления обращениями граждан',
 }
 
 export default function RootLayout({
@@ -18,9 +18,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ru">
-      <body className={`font-sans antialiased`}>
-        {children}
+    <html lang="ru" suppressHydrationWarning>
+      <body className={`${geist.className} antialiased`}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          {children}
+          <Toaster />
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>
